@@ -1,14 +1,14 @@
 {
-  "name": "ssh2-fs",
+  "name": "ssh2-scp",
   "version": "1.0.1",
-  "description": "Remote file system operations over SSH2 session",
-  "homepage": "https://github.com/electerm/ssh2-fs#readme",
+  "description": "Remote file system operations over SSH2 session without SFTP",
+  "homepage": "https://github.com/electerm/ssh2-scp#readme",
   "bugs": {
-    "url": "https://github.com/electerm/ssh2-fs/issues"
+    "url": "https://github.com/electerm/ssh2-scp/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/electerm/ssh2-fs.git"
+    "url": "git+https://github.com/electerm/ssh2-scp.git"
   },
   "license": "MIT",
   "author": "ZHAO Xudong <zxdong@gmail.com>",
@@ -37,7 +37,7 @@
     "build": "vite build --config build/vite.config.ts",
     "build:esm": "vite build --config build/vite.config.ts --outDir dist/esm",
     "build:cjs": "vite build --config build/vite.config.cjs.ts --outDir dist/cjs",
-    "test": "node test/ssh2-fs.test.mjs",
+    "test": "node test/ssh2-fs.test.mjs && node test/transfer.test.mjs",
     "lint": "echo \"Lint not configured\" && exit 0",
     "typecheck": "tsc --noEmit"
   },

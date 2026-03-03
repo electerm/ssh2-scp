@@ -1,6 +1,6 @@
-# ssh2-fs
+# ssh2-scp
 
-通过 SSH2 会话进行远程文件系统操作。
+通过 SSH2 会话进行远程文件系统操作（无需 SFTP）。
 
 [English](./README.md)
 
@@ -14,14 +14,14 @@
 ## 安装
 
 ```bash
-npm install ssh2-fs
+npm install ssh2-scp
 ```
 
 ## 使用方法
 
 ```javascript
 import { Client } from 'ssh2'
-import { createSshFs } from 'ssh2-fs'
+import { createSshFs } from 'ssh2-scp'
 
 const client = new Client()
 client.on('ready', () => {
@@ -97,7 +97,7 @@ createSshFs(client)
 ## 文件传输
 
 ```javascript
-import { Transfer } from 'ssh2-fs/transfer'
+import { Transfer } from 'ssh2-scp/transfer'
 
 const transfer = new Transfer(fs, {
   type: 'download', // 或 'upload'

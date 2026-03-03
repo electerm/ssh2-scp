@@ -1,6 +1,6 @@
-# ssh2-fs
+# ssh2-scp
 
-Remote file system operations over SSH2 session.
+Remote file system operations over SSH2 session without SFTP
 
 [中文](./README-CN.md)
 
@@ -14,14 +14,14 @@ Remote file system operations over SSH2 session.
 ## Install
 
 ```bash
-npm install ssh2-fs
+npm install ssh2-scp
 ```
 
 ## Usage
 
 ```javascript
 import { Client } from 'ssh2'
-import { createSshFs } from 'ssh2-fs'
+import { createSshFs } from 'ssh2-scp'
 
 const client = new Client()
 client.on('ready', () => {
@@ -97,7 +97,7 @@ createSshFs(client)
 ## Transfer
 
 ```javascript
-import { Transfer } from 'ssh2-fs/transfer'
+import { Transfer } from 'ssh2-scp/transfer'
 
 const transfer = new Transfer(fs, {
   type: 'download', // or 'upload'
