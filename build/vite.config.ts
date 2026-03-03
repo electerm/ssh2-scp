@@ -7,8 +7,7 @@ export default defineConfig({
     dts({
       include: ['src/'],
       exclude: ['test/'],
-      rollupTypes: true,
-      skipDiagnostics: true
+      rollupTypes: true
     })
   ],
   build: {

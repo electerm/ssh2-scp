@@ -1,7 +1,19 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
+import { writeFileSync } from 'fs'
 
 export default defineConfig({
+  plugins: [
+    {
+      name: 'write-cjs-package-json',
+      writeBundle() {
+        writeFileSync(
+          resolve(__dirname, '../dist/cjs/package.json'),
+          JSON.stringify({ type: 'commonjs' }, null, 2)
+        )
+      }
+    }
+  ],
   build: {
     target: 'node22',
     lib: {

@@ -1,6 +1,6 @@
 {
   "name": "ssh2-fs",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Remote file system operations over SSH2 session",
   "homepage": "https://github.com/electerm/ssh2-fs#readme",
   "bugs": {
@@ -29,7 +29,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "README-CN.md"
   ],
   "scripts": {
     "build": "vite build --config build/vite.config.ts",
