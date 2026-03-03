@@ -2,11 +2,12 @@ import { createSshFs } from '../dist/esm/ssh-fs.js'
 import { Client } from 'ssh2'
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert'
+import 'dotenv/config'
 
-const TEST_HOST = 'localhost'
-const TEST_PORT = 22235
-const TEST_USER = 'root'
-const TEST_PASSWORD = 'root'
+const TEST_HOST = process.env.TEST_HOST || 'localhost'
+const TEST_PORT = parseInt(process.env.TEST_PORT, 10) || 22235
+const TEST_USER = process.env.TEST_USER || 'root'
+const TEST_PASSWORD = process.env.TEST_PASSWORD || 'root'
 
 const TIMESTAMP = Date.now()
 const TEST_BASE_DIR = `/tmp/test-ssh-fs-${TIMESTAMP}`
