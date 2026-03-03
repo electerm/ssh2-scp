@@ -21,6 +21,11 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js",
       "types": "./dist/esm/index.d.ts"
+    },
+    "./transfer": {
+      "import": "./dist/esm/transfer.js",
+      "require": "./dist/cjs/transfer.js",
+      "types": "./dist/esm/transfer.d.ts"
     }
   },
   "files": [

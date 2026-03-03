@@ -5,13 +5,16 @@ export default defineConfig({
   build: {
     target: 'node22',
     lib: {
-      entry: resolve(__dirname, '../src/index.ts'),
+      entry: {
+        index: resolve(__dirname, '../src/index.ts'),
+        transfer: resolve(__dirname, '../src/transfer.ts')
+      },
       name: 'ssh2Fs',
       formats: ['cjs'],
-      fileName: 'index'
+      fileName: '[name]'
     },
     rollupOptions: {
-      external: ['ssh2', 'stream', 'buffer', 'events'],
+      external: ['ssh2', 'stream', 'buffer', 'events', 'fs', 'path'],
       output: {
         globals: {},
         exports: 'named'
