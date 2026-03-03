@@ -31,7 +31,8 @@
   "files": [
     "dist",
     "README.md",
-    "README-CN.md"
+    "README-CN.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "vite build --config build/vite.config.ts",
