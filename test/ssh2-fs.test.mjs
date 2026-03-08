@@ -77,6 +77,8 @@ describe('SSH File System', { concurrency: false }, () => {
     const content = 'B'.repeat(100 * 1024) // 100KB
     await sftp.writeFile(p, content)
     const r = await sftp.readFile(p)
+    const size = await sftp.getChunkSize()
+    console.log('chunk size:', size)
     assert.strictEqual(r, content)
   }, TEST_TIMEOUT)
 

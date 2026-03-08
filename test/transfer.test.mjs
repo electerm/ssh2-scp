@@ -67,11 +67,11 @@ async function runTests() {
   let passed = 0
   let failed = 0
 
-  async function test(name, fn) {
+  async function test(name, fn, timeout) {
     console.log(`\n▶ ${name}`)
     resetTimer()
     try {
-      const timeoutMs = TEST_TIMEOUT
+      const timeoutMs = timeout || TEST_TIMEOUT
       await Promise.race([
         fn(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Test timeout')), timeoutMs))
@@ -100,12 +100,13 @@ async function runTests() {
       type: 'download',
       remotePath,
       localPath,
-      chunkSize: 1024
+      chunkSize: undefined
     })
 
     await transfer.startTransfer()
 
     const state = transfer.getState()
+    console.log('Transfer chunk size:', transfer.chunkSize)
     assert(state.completed, 'Transfer should be completed')
     assert(fs.existsSync(localPath), 'Local file should exist')
 
@@ -242,7 +243,7 @@ async function runTests() {
 
     uploadTransfer.destroy()
     downloadTransfer.destroy()
-  })
+  }, 30000)
 
   console.log(`\n▶ File Transfer (SSH-based)`)
   console.log(`  ✔ passed: ${passed}, failed: ${failed}`)

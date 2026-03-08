@@ -11,7 +11,7 @@ export class SshFs {
   private session: Client
   private _chunkSize: number | null = null
 
-  async getChunkSize(): Promise<number> {
+  async getChunkSize (): Promise<number> {
     return this.detectChunkSize()
   }
 
@@ -19,63 +19,21 @@ export class SshFs {
     this.session = session
   }
 
-  private async detectChunkSize(): Promise<number> {
-    if (this._chunkSize !== null) {
-      return this._chunkSize
-    }
-    
-    const parseMemKb = (kb: number): number => {
-      if (kb > 256 * 1024) {
-        return 4 * 1024
-      } else if (kb > 128 * 1024) {
-        return 2 * 1024
-      } else if (kb > 64 * 1024) {
-        return 1 * 1024
-      }
-      return 512
-    }
-    
-    try {
-      const output = await this.runCmd('free -b')
-      const lines = output.trim().split('\n')
-      const memLine = lines.find(l => l.startsWith('Mem:'))
-      if (memLine) {
-        const parts = memLine.trim().split(/\s+/)
-        const totalMemKb = parseInt(parts[1], 10)
-        this._chunkSize = parseMemKb(totalMemKb)
-        return this._chunkSize
-      }
-    } catch (err) {
-      console.error('[ssh-fs] detectChunkSize: free -b failed', err)
-    }
-    
-    try {
-      const output = await this.runCmd('cat /proc/meminfo')
-      const memTotalLine = output.split('\n').find(l => l.startsWith('MemTotal:'))
-      if (memTotalLine) {
-        const kb = parseInt(memTotalLine.split(':')[1].trim(), 10)
-        this._chunkSize = parseMemKb(kb)
-        return this._chunkSize
-      }
-    } catch (err) {
-      console.error('[ssh-fs] detectChunkSize: /proc/meminfo failed', err)
-    }
-    
-    this._chunkSize = 1 * 1024
-    console.error('[ssh-fs] detectChunkSize: using default chunkSize')
+  private async detectChunkSize (): Promise<number> {
+    this._chunkSize = 4 * 1024
     return this._chunkSize
   }
 
-  private getExecOpts(): ExecOptions {
+  private getExecOpts (): ExecOptions {
     return {}
   }
 
-  private getMonthIndex(month: string): number {
+  private getMonthIndex (month: string): number {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     return months.indexOf(month)
   }
 
-  private parseMode(modeStr: string): number {
+  private parseMode (modeStr: string): number {
     const permMap: Record<string, number> = {
       '---': 0, '--x': 1, '-w-': 2, '-wx': 3,
       'r--': 4, 'r-x': 5, 'rw-': 6, 'rwx': 7
@@ -94,7 +52,7 @@ export class SshFs {
     return fileType | (owner << 6) | (group << 3) | other
   }
 
-  private runCmd(cmd: string, timeout = 30000): Promise<string> {
+  private runCmd (cmd: string, timeout = 30000): Promise<string> {
     return new Promise((resolve, reject) => {
       let timeoutId: ReturnType<typeof setTimeout>
       const cleanup = () => {
@@ -122,19 +80,19 @@ export class SshFs {
     })
   }
 
-  private rmFolderCmd(remotePath: string) {
+  private rmFolderCmd (remotePath: string) {
     return this.runCmd(`rmdir "${remotePath}"`)
   }
 
-  private rmCmd(remotePath: string) {
+  private rmCmd (remotePath: string) {
     return this.runCmd(`rm "${remotePath}"`)
   }
 
-  async getHomeDir(): Promise<string> {
+  async getHomeDir (): Promise<string> {
     return this.realpath('.')
   }
 
-  async rmdir(remotePath: string): Promise<unknown> {
+  async rmdir (remotePath: string): Promise<unknown> {
     try {
       return await this.rmrf(remotePath)
     } catch (err) {
@@ -143,7 +101,7 @@ export class SshFs {
     }
   }
 
-  private async removeDirectoryRecursively(remotePath: string) {
+  private async removeDirectoryRecursively (remotePath: string) {
     try {
       const contents = await this.listFiles(remotePath)
       for (const item of contents) {
@@ -161,15 +119,15 @@ export class SshFs {
     }
   }
 
-  rmrf(remotePath: string) {
+  rmrf (remotePath: string) {
     return this.runCmd(`rm -rf "${remotePath}"`)
   }
 
-  touch(remotePath: string) {
+  touch (remotePath: string) {
     return this.runCmd(`touch "${remotePath}"`)
   }
 
-  cp(from: string, to: string): Promise<unknown> {
+  cp (from: string, to: string): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const cmd = `cp -r "${from}" "${to}"`
       this.session.exec(cmd, this.getExecOpts(), (err) => {
@@ -179,7 +137,7 @@ export class SshFs {
     })
   }
 
-  mv(from: string, to: string): Promise<unknown> {
+  mv (from: string, to: string): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const cmd = `mv "${from}" "${to}"`
       this.session.exec(cmd, this.getExecOpts(), (err) => {
@@ -189,7 +147,7 @@ export class SshFs {
     })
   }
 
-  runExec(cmd: string): Promise<string> {
+  runExec (cmd: string): Promise<string> {
     return new Promise((resolve, reject) => {
       this.session.exec(cmd, this.getExecOpts(), (err, stream) => {
         if (err) {
@@ -208,7 +166,7 @@ export class SshFs {
     })
   }
 
-  async getFolderSize(folderPath: string): Promise<{ size: string; count: number }> {
+  async getFolderSize (folderPath: string): Promise<{ size: string; count: number }> {
     try {
       const output = await this.runCmd(`du -sh "${folderPath}"`)
       const size = output.trim().split('\t')[0] || '0'
@@ -218,7 +176,7 @@ export class SshFs {
     }
   }
 
-  private async listFiles(remotePath: string): Promise<FileInfo[]> {
+  private async listFiles (remotePath: string): Promise<FileInfo[]> {
     const output = await this.runCmd(`ls -la "${remotePath}"`)
     const lines = output.trim().split('\n')
     const result: FileInfo[] = []
@@ -272,18 +230,18 @@ export class SshFs {
     return result
   }
 
-  list(remotePath: string): Promise<FileInfo[]> {
+  list (remotePath: string): Promise<FileInfo[]> {
     return this.listFiles(remotePath)
   }
 
-  async mkdir(remotePath: string, options: { mode?: number } = {}) {
+  async mkdir (remotePath: string, options: { mode?: number } = {}) {
     const cmd = options.mode
       ? `mkdir -m ${options.mode.toString(8)} -p "${remotePath}"`
       : `mkdir -p "${remotePath}"`
     return this.runCmd(cmd)
   }
 
-  async stat(remotePath: string): Promise<Stats> {
+  async stat (remotePath: string): Promise<Stats> {
     const isSymlink = await this.runCmd(`test -L "${remotePath}" && echo 1 || echo 0`).then(r => r.trim() === '1')
     const output = await this.runCmd(`ls -la "${remotePath}"`)
     const parts = output.trim().split(/\s+/)
@@ -316,16 +274,16 @@ export class SshFs {
     }
   }
 
-  readlink(remotePath: string) {
+  readlink (remotePath: string) {
     return this.runCmd(`readlink "${remotePath}"`).then(output => output.trim())
   }
 
-  realpath(remotePath: string) {
+  realpath (remotePath: string) {
     return this.runCmd(`readlink -f "${remotePath}"`).then(output => output.trim())
       .catch(() => this.runCmd(`cd "${remotePath}" && pwd`).then(output => output.trim()))
   }
 
-  async lstat(remotePath: string): Promise<Stats> {
+  async lstat (remotePath: string): Promise<Stats> {
     const output = await this.runCmd(`ls -ld "${remotePath}"`)
     const isSymlink = output.trim().startsWith('l')
     const lsOutput = await this.runCmd(`ls -la "${remotePath}"`)
@@ -359,34 +317,34 @@ export class SshFs {
     }
   }
 
-  chmod(remotePath: string, mode: number) {
+  chmod (remotePath: string, mode: number) {
     return this.runCmd(`chmod ${mode.toString(8)} "${remotePath}"`)
   }
 
-  rename(remotePath: string, remotePathNew: string) {
+  rename (remotePath: string, remotePathNew: string) {
     return this.runCmd(`mv "${remotePath}" "${remotePathNew}"`)
   }
 
-  rmFolder(remotePath: string) {
+  rmFolder (remotePath: string) {
     return this.rmFolderCmd(remotePath)
   }
 
-  rm(remotePath: string) {
+  rm (remotePath: string) {
     return this.rmCmd(remotePath)
   }
 
-  async readFile(remotePath: string, options?: { chunkSize?: number }): Promise<string> {
+  async readFile (remotePath: string, options?: { chunkSize?: number }): Promise<string> {
     const defaultChunkSize = await this.detectChunkSize()
     const chunkSize = options?.chunkSize ?? defaultChunkSize
     const lsOutput = await this.runCmd(`ls -la "${remotePath}"`)
     const parts = lsOutput.trim().split(/\s+/)
     const fileSize = parts.length >= 5 ? parseInt(parts[4], 10) : 0
-    
+
     if (fileSize <= chunkSize) {
       const output = await this.runCmd(`cat "${remotePath}"`)
       return output
     }
-    
+
     const chunks: string[] = []
     for (let offset = 0; offset < fileSize; offset += chunkSize) {
       try {
@@ -399,15 +357,15 @@ export class SshFs {
         return this.runCmd(`cat "${remotePath}"`)
       }
     }
-    
+
     return chunks.join('')
   }
 
-  async writeFile(remotePath: string, str: string, mode?: number, _options?: { chunkSize?: number }): Promise<void> {
+  async writeFile (remotePath: string, str: string, mode?: number, _options?: { chunkSize?: number }): Promise<void> {
     const defaultChunkSize = await this.detectChunkSize()
     const data = Buffer.from(str)
     const sizeThreshold = defaultChunkSize
-    
+
     if (data.length <= sizeThreshold) {
       const escapedContent = str.replace(/'/g, "'\\''")
       const cmd = `printf '%s' '${escapedContent}' > "${remotePath}"`
@@ -428,13 +386,13 @@ export class SshFs {
         await this.runCmd(`rm -rf "${tempBase}"`)
       }
     }
-    
+
     if (mode) {
       await this.runCmd(`chmod ${mode.toString(8)} "${remotePath}"`)
     }
   }
 }
 
-export function createSshFs(session: Client, options?: SshFsOptions): SshFs {
+export function createSshFs (session: Client, options?: SshFsOptions): SshFs {
   return new SshFs(session, options)
 }
