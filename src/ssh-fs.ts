@@ -33,24 +33,6 @@ export class SshFs {
     return months.indexOf(month)
   }
 
-  private parseMode (modeStr: string): number {
-    const permMap: Record<string, number> = {
-      '---': 0, '--x': 1, '-w-': 2, '-wx': 3,
-      'r--': 4, 'r-x': 5, 'rw-': 6, 'rwx': 7
-    }
-    const perms = modeStr.slice(1, 10)
-    const owner = permMap[perms.slice(0, 3)] || 0
-    const group = permMap[perms.slice(3, 6)] || 0
-    const other = permMap[perms.slice(6, 9)] || 0
-    let fileType = 0o100000
-    if (modeStr.startsWith('d')) fileType = 0o040000
-    else if (modeStr.startsWith('l')) fileType = 0o120000
-    else if (modeStr.startsWith('c')) fileType = 0o020000
-    else if (modeStr.startsWith('b')) fileType = 0o060000
-    else if (modeStr.startsWith('p')) fileType = 0o010000
-    else if (modeStr.startsWith('s')) fileType = 0o140000
-    return fileType | (owner << 6) | (group << 3) | other
-  }
 
   private runCmd (cmd: string, timeout = 30000): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -192,7 +174,7 @@ export class SshFs {
       if (name === '.' || name === '..') continue
 
       const type = parts[0].charAt(0)
-      const mode = parseInt(parts[0].slice(1), 8)
+      const mode = parseModeFromLongname(parts[0])
       const owner = parseInt(parts[2], 10)
       const group = parseInt(parts[3], 10)
       const size = parseInt(parts[4], 10)
@@ -254,7 +236,7 @@ export class SshFs {
     }
     const size = parseInt(parts[4], 10)
     const modeStr = parts[0]
-    const mode = this.parseMode(modeStr)
+    const mode = parseModeFromLongname(modeStr)
     const uid = parseInt(parts[2], 10)
     const gid = parseInt(parts[3], 10)
     return {
@@ -297,7 +279,7 @@ export class SshFs {
     }
     const size = parseInt(parts[4], 10)
     const modeStr = parts[0]
-    const mode = this.parseMode(modeStr)
+    const mode = parseModeFromLongname(modeStr)
     const uid = parseInt(parts[2], 10)
     const gid = parseInt(parts[3], 10)
     return {
@@ -395,4 +377,26 @@ export class SshFs {
 
 export function createSshFs (session: Client, options?: SshFsOptions): SshFs {
   return new SshFs(session, options)
+}
+
+export function parseModeFromLongname (longname: string): number {
+  if (!longname || longname.length < 10) return 0
+  const typeMap: Record<string, number> = {
+    '-': 0o100000,
+    d: 0o040000,
+    l: 0o120000,
+    c: 0o020000,
+    b: 0o060000,
+    p: 0o010000,
+    s: 0o140000
+  }
+  const typeBits = typeMap[longname[0]] || 0o100000
+  const permValues = [0o400, 0o200, 0o100, 0o040, 0o020, 0o010, 0o004, 0o002, 0o001]
+  let permBits = 0
+  for (let i = 0; i < 9; i++) {
+    if (longname[i + 1] !== '-') {
+      permBits |= permValues[i]
+    }
+  }
+  return typeBits | permBits
 }

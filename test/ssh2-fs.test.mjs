@@ -1,4 +1,4 @@
-import { createSshFs } from '../dist/esm/ssh-fs.js'
+import { createSshFs, parseModeFromLongname } from '../dist/esm/ssh-fs.js'
 import { Client } from 'ssh2'
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert'
@@ -49,6 +49,59 @@ after(() => {
     conn.end()
     console.log('\nSSH connection closed')
   }
+})
+
+describe('parseModeFromLongname', () => {
+  test('regular file -rw-r--r-- returns 33188 (0o100644)', () => {
+    assert.strictEqual(parseModeFromLongname('-rw-r--r--'), 33188)
+  })
+
+  test('executable file -rwxr-xr-x returns 0o100755', () => {
+    assert.strictEqual(parseModeFromLongname('-rwxr-xr-x'), 0o100755)
+  })
+
+  test('directory drwxr-xr-x returns 0o040755', () => {
+    assert.strictEqual(parseModeFromLongname('drwxr-xr-x'), 0o040755)
+  })
+
+  test('symlink lrwxrwxrwx returns 0o120777', () => {
+    assert.strictEqual(parseModeFromLongname('lrwxrwxrwx'), 0o120777)
+  })
+
+  test('block device brw-rw---- returns 0o060660', () => {
+    assert.strictEqual(parseModeFromLongname('brw-rw----'), 0o060660)
+  })
+
+  test('char device crw-rw-rw- returns 0o020666', () => {
+    assert.strictEqual(parseModeFromLongname('crw-rw-rw-'), 0o020666)
+  })
+
+  test('fifo prw-r--r-- returns 0o010644', () => {
+    assert.strictEqual(parseModeFromLongname('prw-r--r--'), 0o010644)
+  })
+
+  test('socket srwxrwxrwx returns 0o140777', () => {
+    assert.strictEqual(parseModeFromLongname('srwxrwxrwx'), 0o140777)
+  })
+
+  test('all permissions denied ---------- returns 0o100000', () => {
+    assert.strictEqual(parseModeFromLongname('----------'), 0o100000)
+  })
+
+  test('handles setuid/setgid chars as non-dash (permission bit set)', () => {
+    // e.g. -rwsr-xr-x (setuid bit visible as 's' in owner-execute position)
+    const mode = parseModeFromLongname('-rwsr-xr-x')
+    // position 4 is 's' which is not '-', so execute bit is set
+    assert.ok(mode & 0o100) // owner execute bit should be set
+  })
+
+  test('empty string returns 0', () => {
+    assert.strictEqual(parseModeFromLongname(''), 0)
+  })
+
+  test('null returns 0', () => {
+    assert.strictEqual(parseModeFromLongname(null), 0)
+  })
 })
 
 describe('SSH File System', { concurrency: false }, () => {
