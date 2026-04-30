@@ -96,6 +96,8 @@ createSshFs(client)
 
 ## Transfer
 
+`Transfer` is for single-file uploads and downloads.
+
 ```javascript
 import { Transfer } from 'ssh2-scp/transfer'
 
@@ -115,11 +117,52 @@ await transfer.startTransfer()
 ### Transfer Options
 
 - `type` - Transfer type: `'download'` or `'upload'`
-- `remotePath` - Remote file/folder path
-- `localPath` - Local file/folder path
+- `remotePath` - Remote file path
+- `localPath` - Local file path
 - `chunkSize` - Chunk size for transfer (default: 32768)
 - `onProgress` - Progress callback `(transferred, total) => void`
 - `onData` - Data callback `(count) => void`
+
+## Folder Transfer
+
+`FolderTransfer` streams a tar archive over the SSH command channel. It is initialized from a raw `ssh2` `Client`, supports pause/resume, and targets both POSIX servers and Windows OpenSSH servers that provide `tar`.
+
+Install a tar adapter explicitly if you want folder transfer support:
+
+```bash
+npm install tar
+```
+
+```javascript
+import { Client } from 'ssh2'
+import * as tar from 'tar'
+import { FolderTransfer } from 'ssh2-scp/folder-transfer'
+
+const client = new Client()
+const transfer = new FolderTransfer(client, tar, {
+  type: 'upload',
+  localPath: '/local/folder',
+  remotePath: '/remote/folder',
+  chunkSize: 32768,
+  onProgress: (transferred, total) => {
+    console.log(`Progress: ${transferred}/${total}`)
+  }
+})
+
+await transfer.startTransfer()
+```
+
+### FolderTransfer Notes
+
+- Constructor: `new FolderTransfer(client, tarAdapter, options)`
+- `type` - Transfer type: `'download'` or `'upload'`
+- `remotePath` - Remote folder path
+- `localPath` - Local folder path
+- `chunkSize` - Stream high water mark used by the tar pipeline
+- `tarAdapter` - A tar-compatible object that exposes `c()` and `x()`; `tar` works out of the box
+- `pause()` / `resume()` - Pause or continue the active stream
+- `destroy()` - Abort the current folder transfer
+- Windows remotes use PowerShell plus `tar`; Linux and other POSIX remotes use `tar` directly
 
 ## License
 

@@ -96,6 +96,8 @@ createSshFs(client)
 
 ## 文件传输
 
+`Transfer` 仅用于单文件上传和下载。
+
 ```javascript
 import { Transfer } from 'ssh2-scp/transfer'
 
@@ -115,11 +117,52 @@ await transfer.startTransfer()
 ### 传输选项
 
 - `type` - 传输类型：`'download'`（下载）或 `'upload'`（上传）
-- `remotePath` - 远程文件/文件夹路径
-- `localPath` - 本地文件/文件夹路径
+- `remotePath` - 远程文件路径
+- `localPath` - 本地文件路径
 - `chunkSize` - 传输块大小（默认：32768）
 - `onProgress` - 进度回调函数 `(transferred, total) => void`
 - `onData` - 数据回调函数 `(count) => void`
+
+## 文件夹传输
+
+`FolderTransfer` 会通过 SSH 命令通道流式传输 tar 归档。它直接从原始 `ssh2` `Client` 初始化，支持暂停/恢复，并同时支持 POSIX 服务器和带有 `tar` 的 Windows OpenSSH 服务器。
+
+如果要使用文件夹传输，需要自行安装 tar 适配器：
+
+```bash
+npm install tar
+```
+
+```javascript
+import { Client } from 'ssh2'
+import * as tar from 'tar'
+import { FolderTransfer } from 'ssh2-scp/folder-transfer'
+
+const client = new Client()
+const transfer = new FolderTransfer(client, tar, {
+  type: 'upload',
+  localPath: '/local/folder',
+  remotePath: '/remote/folder',
+  chunkSize: 32768,
+  onProgress: (transferred, total) => {
+    console.log(`进度: ${transferred}/${total}`)
+  }
+})
+
+await transfer.startTransfer()
+```
+
+### FolderTransfer 说明
+
+- 构造方式：`new FolderTransfer(client, tarAdapter, options)`
+- `type` - 传输类型：`'download'` 或 `'upload'`
+- `remotePath` - 远程文件夹路径
+- `localPath` - 本地文件夹路径
+- `chunkSize` - tar 流管道使用的 high water mark
+- `tarAdapter` - 兼容 tar 的对象，需要提供 `c()` 和 `x()`；可直接传入 `tar`
+- `pause()` / `resume()` - 暂停或继续当前流式传输
+- `destroy()` - 中止当前文件夹传输
+- Windows 远端通过 PowerShell 加 `tar` 执行，Linux / 其他 POSIX 远端直接使用 `tar`
 
 ## 许可证
 

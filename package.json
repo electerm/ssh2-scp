@@ -1,12 +1,12 @@
 {
   "name": "ssh2-scp",
-  "version": "2.0.5",
+  "version": "3.0.0",
   "description": "Remote file system operations over SSH2 session without SFTP",
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "vite build --config build/vite.config.ts --outDir dist/esm",
     "build:cjs": "vite build --config build/vite.config.cjs.ts --outDir dist/cjs",
-    "test": "node test/ssh2-fs.test.mjs && node test/transfer.test.mjs",
+    "test": "npm run build && node --test test/ssh2-fs.test.mjs test/folder-transfer.test.mjs && node test/transfer.test.mjs",
     "lint": "echo \"Lint not configured\" && exit 0",
     "typecheck": "tsc --noEmit",
     "bench": "node benchmark/benchmark.js"
@@ -35,6 +35,11 @@
       "import": "./dist/esm/transfer.js",
       "require": "./dist/cjs/transfer.cjs",
       "types": "./dist/esm/transfer.d.ts"
+    },
+    "./folder-transfer": {
+      "import": "./dist/esm/folder-transfer.js",
+      "require": "./dist/cjs/folder-transfer.cjs",
+      "types": "./dist/esm/folder-transfer.d.ts"
     }
   },
   "files": [

@@ -15,14 +15,15 @@ export default defineConfig({
     lib: {
       entry: {
         'ssh-fs': resolve(__dirname, '../src/ssh-fs.ts'),
-        transfer: resolve(__dirname, '../src/transfer.ts')
+        transfer: resolve(__dirname, '../src/transfer.ts'),
+        'folder-transfer': resolve(__dirname, '../src/folder-transfer.ts')
       },
       name: 'ssh2Fs',
       formats: ['es'],
       fileName: '[name]'
     },
     rollupOptions: {
-      external: ['ssh2', 'stream', 'buffer', 'events', 'fs', 'path'],
+      external: ['ssh2', 'stream', 'stream/promises', 'buffer', 'events', 'fs', 'path', 'tar'],
       output: {
         globals: {}
       }
