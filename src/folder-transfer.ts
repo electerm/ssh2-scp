@@ -126,7 +126,7 @@ export class FolderTransfer {
     this.activeChannel = channel
     const closePromise = this.waitForChannelClose(channel)
 
-    const packStream = this.tarAdapter.c({ cwd: localPath, portable: true }, ['.'])
+    const packStream = this.tarAdapter.c({ cwd: localPath }, ['.'])
     this.pauseTarget = packStream
     const progressStream = this.createProgressStream()
     const remoteStdin = this.getChannelWritable(channel)
