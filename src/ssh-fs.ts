@@ -28,6 +28,10 @@ export class SshFs {
     return {}
   }
 
+  private maskMode (mode: number): number {
+    return mode & 0o7777
+  }
+
   private getMonthIndex (month: string): number {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     return months.indexOf(month)
@@ -218,7 +222,7 @@ export class SshFs {
 
   async mkdir (remotePath: string, options: { mode?: number } = {}) {
     const cmd = options.mode
-      ? `mkdir -m ${options.mode.toString(8)} -p "${remotePath}"`
+      ? `mkdir -m ${this.maskMode(options.mode).toString(8)} -p "${remotePath}"`
       : `mkdir -p "${remotePath}"`
     return this.runCmd(cmd)
   }
@@ -300,7 +304,7 @@ export class SshFs {
   }
 
   chmod (remotePath: string, mode: number) {
-    return this.runCmd(`chmod ${mode.toString(8)} "${remotePath}"`)
+    return this.runCmd(`chmod ${this.maskMode(mode).toString(8)} "${remotePath}"`)
   }
 
   rename (remotePath: string, remotePathNew: string) {
@@ -370,7 +374,7 @@ export class SshFs {
     }
 
     if (mode) {
-      await this.runCmd(`chmod ${mode.toString(8)} "${remotePath}"`)
+      await this.runCmd(`chmod ${this.maskMode(mode).toString(8)} "${remotePath}"`)
     }
   }
 }
