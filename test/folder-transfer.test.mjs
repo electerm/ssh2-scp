@@ -131,7 +131,7 @@ function createFolderFixture(rootPath) {
 
 async function collectTarBuffer(sourcePath) {
   const chunks = []
-  for await (const chunk of tar.c({ cwd: sourcePath, portable: true }, ['.'])) {
+  for await (const chunk of tar.c({ cwd: sourcePath }, ['.'])) {
     chunks.push(Buffer.from(chunk))
   }
   return Buffer.concat(chunks)
@@ -265,6 +265,35 @@ async function runClientExec(conn, command) {
   })
 }
 
+async function getManifestWithMtime(rootPath) {
+  const output = []
+
+  async function walk(currentPath) {
+    const entries = await fs.promises.readdir(currentPath, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+
+    for (const entry of entries) {
+      const absolutePath = path.join(currentPath, entry.name)
+      const relativePath = path.relative(rootPath, absolutePath).split(path.sep).join('/')
+      if (entry.isDirectory()) {
+        output.push(`dir:${relativePath}`)
+        await walk(absolutePath)
+        continue
+      }
+
+      if (entry.isFile()) {
+        const stat = await fs.promises.stat(absolutePath)
+        const buffer = await fs.promises.readFile(absolutePath)
+        const hash = crypto.createHash('md5').update(buffer).digest('hex')
+        output.push(`file:${relativePath}:${buffer.length}:${hash}:${stat.mtimeMs}`)
+      }
+    }
+  }
+
+  await walk(rootPath)
+  return output.sort()
+}
+
 describe('FolderTransfer', { concurrency: false }, () => {
   test('uses PowerShell tar commands for Windows downloads', async () => {
     const sourcePath = path.join(LOCAL_BASE_DIR, 'mock-windows-download-source')
@@ -343,6 +372,74 @@ describe('FolderTransfer', { concurrency: false }, () => {
 
     assert.equal(transfer.getState().completed, true)
     assert.deepEqual(await createManifest(extractedPath), await createManifest(sourcePath))
+  })
+
+  test('preserves file modification times during upload', async () => {
+    const sourcePath = path.join(LOCAL_BASE_DIR, 'mtime-upload-source')
+    const extractedPath = path.join(LOCAL_BASE_DIR, 'mtime-upload-extracted')
+
+    // Create files with specific modification times
+    fs.mkdirSync(sourcePath, { recursive: true })
+    fs.mkdirSync(path.join(sourcePath, 'subdir'), { recursive: true })
+
+    const testFile1 = path.join(sourcePath, 'file1.txt')
+    const testFile2 = path.join(sourcePath, 'subdir', 'file2.txt')
+    fs.writeFileSync(testFile1, 'content1')
+    fs.writeFileSync(testFile2, 'content2')
+
+    // Set specific modification times (in the past)
+    const mtime1 = new Date('2020-01-15T10:30:00Z')
+    const mtime2 = new Date('2021-06-20T14:45:00Z')
+    fs.utimesSync(testFile1, mtime1, mtime1)
+    fs.utimesSync(testFile2, mtime2, mtime2)
+
+    // Verify source mtimes are set correctly
+    const sourceStat1 = fs.statSync(testFile1)
+    const sourceStat2 = fs.statSync(testFile2)
+    assert.equal(sourceStat1.mtimeMs, mtime1.getTime())
+    assert.equal(sourceStat2.mtimeMs, mtime2.getTime())
+
+    const client = new MockClient([
+      (command, callback) => {
+        // First command: check if tar exists (Linux/Unix)
+        callback(null, createMockChannel({ stdoutChunks: [''] }))
+      },
+      (command, callback) => {
+        // Second command: extract tar
+        callback(null, createMockChannel({
+          collectStdin: true,
+          onStdinComplete: async buffer => {
+            await extractTarBuffer(buffer, extractedPath)
+          }
+        }))
+      }
+    ])
+
+    const transfer = new FolderTransfer(client, tar, {
+      type: 'upload',
+      remotePath: '/remote/path',
+      localPath: sourcePath,
+      chunkSize: 1024
+    })
+
+    await transfer.startTransfer()
+
+    assert.equal(transfer.getState().completed, true)
+
+    // Verify modification times are preserved in extracted files
+    const extractedStat1 = fs.statSync(path.join(extractedPath, 'file1.txt'))
+    const extractedStat2 = fs.statSync(path.join(extractedPath, 'subdir', 'file2.txt'))
+
+    // Allow small tolerance for filesystem precision differences
+    const tolerance = 1000 // 1 second
+    assert.ok(
+      Math.abs(extractedStat1.mtimeMs - mtime1.getTime()) < tolerance,
+      `file1.txt mtime not preserved: expected ${mtime1.getTime()}, got ${extractedStat1.mtimeMs}`
+    )
+    assert.ok(
+      Math.abs(extractedStat2.mtimeMs - mtime2.getTime()) < tolerance,
+      `subdir/file2.txt mtime not preserved: expected ${mtime2.getTime()}, got ${extractedStat2.mtimeMs}`
+    )
   })
 
   test('uploads and downloads nested folders with pause and resume', async (t) => {
