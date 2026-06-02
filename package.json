@@ -6,7 +6,7 @@
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "vite build --config build/vite.config.ts --outDir dist/esm",
     "build:cjs": "vite build --config build/vite.config.cjs.ts --outDir dist/cjs",
-    "test": "npm run build && node --test test/ssh2-fs.test.mjs test/folder-transfer.test.mjs && node test/transfer.test.mjs",
+    "test": "npm run build && node --test test/ssh2-fs.test.mjs test/ssh-fs-unit.test.mjs test/folder-transfer.test.mjs && node test/transfer.test.mjs",
     "lint": "echo \"Lint not configured\" && exit 0",
     "typecheck": "tsc --noEmit",
     "bench": "node benchmark/benchmark.js"
