@@ -1,6 +1,6 @@
 import { createSshFs } from '../dist/esm/ssh-fs.js'
 import { Transfer } from '../dist/esm/transfer.js'
-import { Client } from 'ssh2'
+import { Client } from '@electerm/ssh2'
 import fs from 'fs'
 import path from 'path'
 import 'dotenv/config'

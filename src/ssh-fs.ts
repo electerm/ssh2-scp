@@ -2,21 +2,33 @@ import type { Client, ExecOptions } from 'ssh2'
 import type {
   SshFsOptions,
   FileInfo,
-  Stats
+  Stats,
+  IconvDecoder
 } from './type.js'
 
-export type { SshFsOptions, FileInfo, Stats }
+export type { SshFsOptions, FileInfo, Stats, IconvDecoder }
 
 export class SshFs {
   private session: Client
   private _chunkSize: number | null = null
+  private iconv?: IconvDecoder
+  private encoding: string
 
   async getChunkSize (): Promise<number> {
     return this.detectChunkSize()
   }
 
-  constructor(session: Client, _options?: SshFsOptions) {
+  constructor(session: Client, options?: SshFsOptions) {
     this.session = session
+    this.iconv = options?.iconv
+    this.encoding = options?.encoding || 'utf-8'
+  }
+
+  private decodeBuffer (buf: Buffer): string {
+    if (this.iconv) {
+      return this.iconv.decode(buf, this.encoding)
+    }
+    return buf.toString()
   }
 
   private async detectChunkSize (): Promise<number> {
@@ -55,11 +67,11 @@ export class SshFs {
         } else {
           let out = Buffer.from('')
           stream.on('end', () => {
-            resolve(out.toString())
+            resolve(this.decodeBuffer(out))
           }).on('data', (data: Buffer) => {
             out = Buffer.concat([out, data])
           }).stderr.on('data', (data: Buffer) => {
-            reject(data.toString())
+            reject(this.decodeBuffer(data))
           })
         }
       })
@@ -141,11 +153,11 @@ export class SshFs {
         } else {
           let out = Buffer.from('')
           stream.on('end', () => {
-            resolve(out.toString())
+            resolve(this.decodeBuffer(out))
           }).on('data', (data: Buffer) => {
             out = Buffer.concat([out, data])
           }).stderr.on('data', (data: Buffer) => {
-            reject(data.toString())
+            reject(this.decodeBuffer(data))
           })
         }
       })

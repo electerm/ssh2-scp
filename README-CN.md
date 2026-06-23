@@ -8,6 +8,7 @@
 
 - 通过 SSH2 shell/command 会话进行文件操作（无需 SFTP）
 - 支持所有常用文件系统操作
+- 支持非 UTF-8 编码（如 GBK），通过可选的 iconv-lite 实现
 - 同时支持 ESM 和 CJS 导出
 - 支持 TypeScript
 
@@ -49,10 +50,37 @@ client.on('ready', () => {
 ### 构造函数
 
 ```javascript
-createSshFs(client)
+createSshFs(client, options?)
 ```
 
 - `client` - 已认证的 ssh2 Client 实例
+- `options` - 可选配置对象：
+  - `iconv` - 用于非 UTF-8 编码支持的 iconv-lite 实例（需提供 `decode(buf, encoding)` 方法）
+  - `encoding` - 目标编码名称（默认：`'utf-8'`），仅在提供了 `iconv` 时生效
+
+### 编码支持
+
+默认情况下，ssh2-scp 假设远程服务器使用 UTF-8 编码。如果服务器使用其他编码（例如中文 Windows 系统的 GBK），可以传入 `iconv-lite` 实例来正确解码文件名和命令输出。
+
+安装 `iconv-lite`：
+
+```bash
+npm install iconv-lite
+```
+
+```javascript
+import iconv from 'iconv-lite'
+import { createSshFs } from 'ssh2-scp'
+
+// 创建支持 GBK 编码的 SshFs 实例
+const fs = createSshFs(client, { iconv, encoding: 'gbk' })
+
+// 文件名会从 GBK 正确解码为 Unicode
+const files = await fs.list('/path/to/dir')
+console.log(files[0].name) // '测试文件.txt'，而不是乱码
+```
+
+> **注意：** 为了保持包的轻量，`iconv-lite` 不作为运行时依赖打包。只有在需要非 UTF-8 编码支持时才需要安装它。
 
 ### 方法
 
@@ -152,6 +180,25 @@ const transfer = new FolderTransfer(client, tar, {
 await transfer.startTransfer()
 ```
 
+### FolderTransfer 编码支持
+
+在向非 UTF-8 文件名的服务器（如 GBK）传输文件夹时，可以传入 `iconv` 和 `encoding` 选项。文件名会在 tar 流中实时转换，通过流式 tar 头解析实现，无需远程服务器安装额外工具。
+
+```javascript
+import iconv from 'iconv-lite'
+
+const transfer = new FolderTransfer(client, tar, {
+  type: 'download',
+  remotePath: '/remote/folder',
+  localPath: '/local/folder',
+  iconv,
+  encoding: 'gbk'
+})
+
+await transfer.startTransfer()
+// 本地文件名已正确转为 UTF-8
+```
+
 ### FolderTransfer 说明
 
 - 构造方式：`new FolderTransfer(client, tarAdapter, options)`
@@ -159,6 +206,8 @@ await transfer.startTransfer()
 - `remotePath` - 远程文件夹路径
 - `localPath` - 本地文件夹路径
 - `chunkSize` - tar 流管道使用的 high water mark
+- `iconv` - 用于编码转换的 iconv-lite 实例（需提供 `encode(str, enc)` 和 `decode(buf, enc)` 方法）
+- `encoding` - 远程文件系统编码（如 `'gbk'`），tar 流中的文件名会在该编码与 UTF-8 之间转换
 - `tarAdapter` - 兼容 tar 的对象，需要提供 `c()` 和 `x()`；可直接传入 `tar`
 - `pause()` / `resume()` - 暂停或继续当前流式传输
 - `destroy()` - 中止当前文件夹传输

@@ -8,6 +8,7 @@ Remote file system operations/file transfer over SSH2 session without SFTP
 
 - File operations via SSH2 shell/command session (no SFTP required)
 - Supports all common file system operations
+- Non-UTF-8 encoding support (e.g. GBK) via optional iconv-lite
 - Both ESM and CJS exports
 - TypeScript support
 
@@ -49,10 +50,37 @@ client.on('ready', () => {
 ### Constructor
 
 ```javascript
-createSshFs(client)
+createSshFs(client, options?)
 ```
 
 - `client` - An authenticated ssh2 Client instance
+- `options` - Optional configuration object:
+  - `iconv` - An iconv-lite instance for non-UTF-8 encoding support (must expose `decode(buf, encoding)`)
+  - `encoding` - Target encoding name (default: `'utf-8'`). Only effective when `iconv` is provided
+
+### Encoding Support
+
+By default, ssh2-scp assumes the remote server uses UTF-8 encoding. If your server uses a different encoding (e.g. GBK on Chinese Windows systems), pass an `iconv-lite` instance to decode file names and command output correctly.
+
+Install `iconv-lite` in your project:
+
+```bash
+npm install iconv-lite
+```
+
+```javascript
+import iconv from 'iconv-lite'
+import { createSshFs } from 'ssh2-scp'
+
+// Create an SshFs instance with GBK encoding support
+const fs = createSshFs(client, { iconv, encoding: 'gbk' })
+
+// File names are now decoded from GBK to Unicode
+const files = await fs.list('/path/to/dir')
+console.log(files[0].name) // '测试文件.txt' instead of garbled bytes
+```
+
+> **Note:** `iconv-lite` is not bundled as a runtime dependency to keep the package lightweight. You only need to install it if you require non-UTF-8 encoding support.
 
 ### Methods
 
@@ -152,6 +180,25 @@ const transfer = new FolderTransfer(client, tar, {
 await transfer.startTransfer()
 ```
 
+### FolderTransfer Encoding Support
+
+When transferring folders to/from servers with non-UTF-8 filenames (e.g. GBK), pass `iconv` and `encoding` options. The filenames in the tar stream are converted in real-time using a streaming tar header transform — no remote-side tools required.
+
+```javascript
+import iconv from 'iconv-lite'
+
+const transfer = new FolderTransfer(client, tar, {
+  type: 'download',
+  remotePath: '/remote/folder',
+  localPath: '/local/folder',
+  iconv,
+  encoding: 'gbk'
+})
+
+await transfer.startTransfer()
+// Local files now have correct UTF-8 names
+```
+
 ### FolderTransfer Notes
 
 - Constructor: `new FolderTransfer(client, tarAdapter, options)`
@@ -159,6 +206,8 @@ await transfer.startTransfer()
 - `remotePath` - Remote folder path
 - `localPath` - Local folder path
 - `chunkSize` - Stream high water mark used by the tar pipeline
+- `iconv` - An iconv-lite instance for encoding conversion (must expose `encode(str, enc)` and `decode(buf, enc)`)
+- `encoding` - Remote filesystem encoding (e.g. `'gbk'`). Filenames in the tar stream are converted between this encoding and UTF-8
 - `tarAdapter` - A tar-compatible object that exposes `c()` and `x()`; `tar` works out of the box
 - `pause()` / `resume()` - Pause or continue the active stream
 - `destroy()` - Abort the current folder transfer

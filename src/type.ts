@@ -1,6 +1,14 @@
 import type { Client } from 'ssh2'
 
+export interface IconvDecoder {
+  decode: (buf: Buffer, encoding: string) => string
+}
+
 export interface SshFsOptions {
+  /** Pass an iconv-lite instance to support non-UTF-8 encodings (e.g. GBK). Must have a `decode(buf, encoding)` method. */
+  iconv?: IconvDecoder
+  /** Encoding to use when decoding command output (default: 'utf-8'). Only effective when `iconv` is provided. */
+  encoding?: string
 }
 
 export interface FileInfo {
@@ -42,6 +50,10 @@ export interface TransferOptions {
   remotePath: string
   localPath: string
   chunkSize?: number
+  /** Pass an iconv-lite instance to support non-UTF-8 encoding in folder transfers. Must expose `encode(str, encoding)` and `decode(buf, encoding)`. */
+  iconv?: IconvDecoder & { encode: (str: string, encoding: string) => Buffer }
+  /** Remote filesystem encoding (e.g. 'gbk'). When set, tar filename bytes are converted between this encoding and UTF-8. */
+  encoding?: string
   onProgress?: (transferred: number, total: number) => void
   onData?: (count: number) => void
 }

@@ -1,6 +1,7 @@
 import { createSshFs } from '../dist/esm/ssh-fs.js'
 import { FolderTransfer } from '../dist/esm/folder-transfer.js'
-import { Client } from 'ssh2'
+import { Client } from '@electerm/ssh2'
+import iconv from 'iconv-lite'
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
@@ -598,6 +599,245 @@ describe('FolderTransfer', { concurrency: false }, () => {
         await runClientExec(conn, toPowerShellCommand(`if (Test-Path -LiteralPath '${escapePowerShell(normalizedRemotePath)}') { Remove-Item -LiteralPath '${escapePowerShell(normalizedRemotePath)}' -Recurse -Force }`))
       } catch {
       }
+      conn.end()
+    }
+  }, TEST_TIMEOUT)
+})
+
+describe('FolderTransfer encoding support', { concurrency: false }, () => {
+  test('download with encoding uses regular tar command (iconv transform)', async () => {
+    const sourcePath = path.join(LOCAL_BASE_DIR, 'encoding-download-source')
+    const targetPath = path.join(LOCAL_BASE_DIR, 'encoding-download-target')
+    createFolderFixture(sourcePath)
+    const tarBuffer = await collectTarBuffer(sourcePath)
+
+    const client = new MockClient([
+      (_command, callback) => {
+        callback(null, createMockChannel({ stdoutChunks: ['Linux\n'] }))
+      },
+      (_command, callback) => {
+        callback(null, createMockChannel({ stdoutChunks: ['4096\n'] }))
+      },
+      (command, callback) => {
+        // Should still use regular tar — encoding conversion happens in the stream
+        assert.match(command, /^tar -cf/)
+        assert.ok(!command.includes('python'), 'Should not use python')
+        callback(null, createMockChannel({ stdoutChunks: [tarBuffer] }))
+      }
+    ])
+
+    const transfer = new FolderTransfer(client, tar, {
+      type: 'download',
+      remotePath: '/remote/path',
+      localPath: targetPath,
+      chunkSize: 1024,
+      iconv,
+      encoding: 'gbk'
+    })
+
+    await transfer.startTransfer()
+
+    assert.equal(transfer.getState().completed, true)
+    assert.deepEqual(await createManifest(targetPath), await createManifest(sourcePath))
+  })
+
+  test('upload with encoding uses regular tar command (iconv transform)', async () => {
+    const sourcePath = path.join(LOCAL_BASE_DIR, 'encoding-upload-source')
+    const extractedPath = path.join(LOCAL_BASE_DIR, 'encoding-upload-extracted')
+    createFolderFixture(sourcePath)
+
+    const client = new MockClient([
+      (_command, callback) => {
+        callback(null, createMockChannel({ stdoutChunks: ['Linux\n'] }))
+      },
+      (command, callback) => {
+        // Should use regular tar command — encoding conversion happens in the stream
+        assert.match(command, /tar -xf/)
+        assert.ok(!command.includes('python'), 'Should not use python')
+        assert.match(command, /mkdir -p/)
+        callback(null, createMockChannel({
+          collectStdin: true,
+          onStdinComplete: async buffer => {
+            await extractTarBuffer(buffer, extractedPath)
+          }
+        }))
+      }
+    ])
+
+    const transfer = new FolderTransfer(client, tar, {
+      type: 'upload',
+      remotePath: '/remote/path',
+      localPath: sourcePath,
+      chunkSize: 1024,
+      iconv,
+      encoding: 'gbk'
+    })
+
+    await transfer.startTransfer()
+
+    assert.equal(transfer.getState().completed, true)
+    assert.deepEqual(await createManifest(extractedPath), await createManifest(sourcePath))
+  })
+
+  test('download without encoding uses regular tar command', async () => {
+    const sourcePath = path.join(LOCAL_BASE_DIR, 'no-encoding-download-source')
+    const targetPath = path.join(LOCAL_BASE_DIR, 'no-encoding-download-target')
+    createFolderFixture(sourcePath)
+    const tarBuffer = await collectTarBuffer(sourcePath)
+
+    const client = new MockClient([
+      (_command, callback) => {
+        callback(null, createMockChannel({ stdoutChunks: ['Linux\n'] }))
+      },
+      (_command, callback) => {
+        callback(null, createMockChannel({ stdoutChunks: ['4096\n'] }))
+      },
+      (command, callback) => {
+        assert.match(command, /^tar -cf/)
+        callback(null, createMockChannel({ stdoutChunks: [tarBuffer] }))
+      }
+    ])
+
+    const transfer = new FolderTransfer(client, tar, {
+      type: 'download',
+      remotePath: '/remote/path',
+      localPath: targetPath,
+      chunkSize: 1024
+    })
+
+    await transfer.startTransfer()
+
+    assert.equal(transfer.getState().completed, true)
+    assert.deepEqual(await createManifest(targetPath), await createManifest(sourcePath))
+  })
+})
+
+describe('FolderTransfer encoding - real server', { concurrency: false }, () => {
+  test('download folder with GBK-encoded filenames', async () => {
+    if (!RUN_FOLDER_TRANSFER_INTEGRATION) {
+      return
+    }
+
+    let connection
+    try {
+      connection = await connectSSH()
+    } catch (error) {
+      console.log(`SSH server unavailable, skipping: ${error.message || error}`)
+      return
+    }
+
+    const { conn } = connection
+    const remotePath = `${TEST_BASE_DIR}/gbk-download`
+    const downloadPath = path.join(LOCAL_BASE_DIR, 'gbk-download-result')
+
+    try {
+      try { await runClientExec(conn, `rm -rf "${TEST_BASE_DIR}"`) } catch {}
+      await runClientExec(conn, `mkdir -p "${remotePath}"`)
+
+      // Create files with GBK-encoded names using printf + xargs
+      const gbkNames = [
+        { hex: 'b2e2cad4cec4bcfe', utf8: '测试文件' },
+        { hex: 'c4e3bac3cac0bde7', utf8: '你好世界' },
+        { hex: 'ced2b5c4b7d6cfed', utf8: '我的分享' }
+      ]
+
+      for (const { hex } of gbkNames) {
+        const bytes = hex.match(/.{2}/g).map(h => `\\x${h}`).join('')
+        const printfCmd = `printf '${bytes}' | xargs -0 -I{} touch "${remotePath}/{}"`
+        await runClientExec(conn, printfCmd)
+      }
+      await runClientExec(conn, `touch "${remotePath}/ascii-file.txt"`)
+
+      // Download with GBK encoding + iconv transform
+      const transfer = new FolderTransfer(conn, tar, {
+        type: 'download',
+        remotePath,
+        localPath: downloadPath,
+        chunkSize: 4096,
+        iconv,
+        encoding: 'gbk'
+      })
+
+      await transfer.startTransfer()
+
+      assert.equal(transfer.getState().completed, true)
+
+      const localFiles = await fs.promises.readdir(downloadPath)
+      console.log('Downloaded files:', localFiles)
+
+      for (const { utf8 } of gbkNames) {
+        assert.ok(
+          localFiles.includes(utf8),
+          `Expected "${utf8}" in local files, got: ${localFiles.join(', ')}`
+        )
+      }
+      assert.ok(localFiles.includes('ascii-file.txt'), 'Expected ascii-file.txt')
+    } finally {
+      try { await runClientExec(conn, `rm -rf "${TEST_BASE_DIR}"`) } catch {}
+      conn.end()
+    }
+  }, TEST_TIMEOUT)
+
+  test('upload folder with UTF-8 filenames to GBK remote', async () => {
+    if (!RUN_FOLDER_TRANSFER_INTEGRATION) {
+      return
+    }
+
+    let connection
+    try {
+      connection = await connectSSH()
+    } catch (error) {
+      console.log(`SSH server unavailable, skipping: ${error.message || error}`)
+      return
+    }
+
+    const { conn } = connection
+    const remotePath = `${TEST_BASE_DIR}/gbk-upload`
+    const uploadPath = path.join(LOCAL_BASE_DIR, 'gbk-upload-source')
+
+    try {
+      try { await runClientExec(conn, `rm -rf "${TEST_BASE_DIR}"`) } catch {}
+
+      fs.mkdirSync(uploadPath, { recursive: true })
+      const chineseNames = ['测试文件', '你好世界', '我的分享']
+      for (const name of chineseNames) {
+        fs.writeFileSync(path.join(uploadPath, `${name}.txt`), `content of ${name}`)
+      }
+      fs.writeFileSync(path.join(uploadPath, 'ascii-file.txt'), 'ascii content')
+
+      // Upload with GBK encoding + iconv transform
+      const transfer = new FolderTransfer(conn, tar, {
+        type: 'upload',
+        remotePath,
+        localPath: uploadPath,
+        chunkSize: 4096,
+        iconv,
+        encoding: 'gbk'
+      })
+
+      await transfer.startTransfer()
+
+      assert.equal(transfer.getState().completed, true)
+
+      // Verify remote files have GBK-encoded names using iconv-aware SshFs
+      const gbkSftp = createSshFs(conn, { iconv, encoding: 'gbk' })
+      const remoteFiles = await gbkSftp.list(remotePath)
+      console.log('Remote files (GBK decoded):')
+      for (const f of remoteFiles) console.log(`  ${f.type} ${f.name}`)
+
+      const remoteNames = remoteFiles.map(f => f.name)
+      for (const name of chineseNames) {
+        assert.ok(
+          remoteNames.includes(`${name}.txt`),
+          `Expected "${name}.txt" in remote files, got: ${remoteNames.join(', ')}`
+        )
+      }
+      assert.ok(remoteNames.includes('ascii-file.txt'), 'Expected ascii-file.txt')
+
+      const catOutput = await runClientExec(conn, `cat "${remotePath}/ascii-file.txt"`)
+      assert.equal(catOutput.trim(), 'ascii content')
+    } finally {
+      try { await runClientExec(conn, `rm -rf "${TEST_BASE_DIR}"`) } catch {}
       conn.end()
     }
   }, TEST_TIMEOUT)
