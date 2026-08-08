@@ -194,3 +194,88 @@ describe('parseModeFromLongname', () => {
     assert.equal(maskedLink, 0o777)
   })
 })
+
+/**
+ * Mock client that returns canned stdout when an executed command matches one
+ * of the configured substrings. Used to drive list/lstat parsing without a
+ * live SSH server.
+ */
+function createOutputMock(outputMap) {
+  const commands = []
+  const mockClient = {
+    exec: (cmd, callback) => {
+      commands.push(cmd)
+      let payload = ''
+      for (const [key, val] of Object.entries(outputMap)) {
+        if (cmd.includes(key)) {
+          payload = val
+          break
+        }
+      }
+      const handlers = {}
+      const mockStream = {
+        on: (event, handler) => {
+          handlers[event] = handler
+          return mockStream
+        },
+        stderr: {
+          on: () => mockStream
+        }
+      }
+      callback(null, mockStream)
+      // Flush asynchronously so 'data' is delivered before 'end' regardless of
+      // the order runCmd registers the handlers (it registers 'end' first).
+      process.nextTick(() => {
+        if (handlers.data) {
+          handlers.data(Buffer.from(payload))
+        }
+        if (handlers.end) {
+          handlers.end()
+        }
+      })
+    },
+    getCommands: () => [...commands]
+  }
+  return mockClient
+}
+
+describe('SshFs list symlink parsing', () => {
+  test('strips " -> target" from symlink names', async () => {
+    const lsOutput = [
+      'total 12',
+      '-rw-r--r-- 1 user group 5 Aug 8 12:00 a.txt',
+      'drwxr-xr-x 2 user group 4096 Aug 8 12:00 sub',
+      'lrwxrwxrwx 1 user group 3 Aug 8 12:00 link -> a.txt'
+    ].join('\n')
+    const mockClient = createOutputMock({ 'ls -la': lsOutput })
+    const sftp = new SshFs(mockClient)
+    const list = await sftp.list('/test')
+
+    const link = list.find(item => item.type === 'l')
+    assert.ok(link, 'expected a symlink entry')
+    // Name must be the bare link name, not "link -> a.txt"
+    assert.equal(link.name, 'link')
+
+    const file = list.find(item => item.name === 'a.txt')
+    assert.ok(file, 'expected regular file entry')
+    assert.equal(file.type, '-')
+
+    const dir = list.find(item => item.name === 'sub')
+    assert.ok(dir, 'expected directory entry')
+    assert.equal(dir.type, 'd')
+  })
+
+  test('preserves regular file names containing " -> "', async () => {
+    const lsOutput = [
+      'total 4',
+      '-rw-r--r-- 1 user group 5 Aug 8 12:00 weird -> name.txt'
+    ].join('\n')
+    const mockClient = createOutputMock({ 'ls -la': lsOutput })
+    const sftp = new SshFs(mockClient)
+    const list = await sftp.list('/test')
+    // Only symlinks (type 'l') get the suffix stripped; regular files keep it
+    assert.equal(list.length, 1)
+    assert.equal(list[0].type, '-')
+    assert.equal(list[0].name, 'weird -> name.txt')
+  })
+})

@@ -186,10 +186,18 @@ export class SshFs {
       const parts = line.split(/\s+/)
       if (parts.length < 9) continue
 
-      const name = parts.slice(8).join(' ')
-      if (name === '.' || name === '..') continue
-
       const type = parts[0].charAt(0)
+      let name = parts.slice(8).join(' ')
+      // `ls -la` renders symlinks as "name -> target", while native SFTP
+      // readdir returns only the link name. Strip the " -> target" suffix so
+      // callers receive the bare link name and can stat/resolve it correctly.
+      if (type === 'l') {
+        const arrow = name.indexOf(' -> ')
+        if (arrow > 0) {
+          name = name.slice(0, arrow)
+        }
+      }
+      if (name === '.' || name === '..') continue
       const mode = parseModeFromLongname(parts[0])
       const owner = parseInt(parts[2], 10)
       const group = parseInt(parts[3], 10)
